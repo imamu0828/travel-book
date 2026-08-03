@@ -274,10 +274,10 @@ function addSchedule(data={}){
     let row=schedule.insertRow();
     row.innerHTML=`
     <td>
-        <input type="text" inputmode="numeric" value="${data.date || ''}" placeholder="">
+        <input type="text" inputmode="text" value="${data.date || ''}" placeholder="">
     </td>
     <td>
-        <input type="text" inputmode="numeric" value="${data.time || ''}" placeholder="">
+        <input type="text" inputmode="text" value="${data.time || ''}" placeholder="">
     </td>
     <td>
         <input value="${data.place || ''}" placeholder="">
