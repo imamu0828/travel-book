@@ -112,13 +112,17 @@ button{
 table{
     width:100%;
     border-collapse:collapse;
-    min-width: 500px; /* テーブルが縮みすぎるのを防止 */
+    min-width: 550px; /* テーブルが縮みすぎるのを防止 */
 }
+
+#schedule th:nth-child(1), #schedule td:nth-child(1) { width: 9%; }  /* 日付 */
+#schedule th:nth-child(2), #schedule td:nth-child(2) { width: 9%; }  /* 時間 */
+#schedule th:nth-child(4), #schedule td:nth-child(4) { width: 30%; } /* 内容 */
 
 th,
 td{
     border:1px solid #ccc;
-    padding:6px;
+    padding:4px;
     text-align: left;
 }
 
@@ -130,6 +134,12 @@ th{
 
 .money{
     text-align:right;
+}
+
+#schedule input,
+#cost input{
+    padding:4px;
+    margin-bottom:0;
 }
 
 .total{
@@ -178,11 +188,11 @@ th{
     }
 
     /* 行程表テーブルの各列最小幅確保 */
-    #schedule th:nth-child(1) { min-width: 65px; } /* 日付 */
-    #schedule th:nth-child(2) { min-width: 60px; } /* 時間 */
-    #schedule th:nth-child(3) { min-width: 100px; } /* 場所 */
-    #schedule th:nth-child(4) { min-width: 120px; } /* 内容 */
-    #schedule th:nth-child(5) { min-width: 100px; } /* メモ */
+    #schedule th:nth-child(1) { min-width: 50px; }  /* 日付 */
+    #schedule th:nth-child(2) { min-width: 55px; }  /* 時間 */
+    #schedule th:nth-child(3) { min-width: 90px; }  /* 場所 */
+    #schedule th:nth-child(4) { min-width: 150px; } /* 内容 */
+    #schedule th:nth-child(5) { min-width: 90px; }  /* メモ */
     #schedule th:nth-child(6) { min-width: 90px; }  /* 追加・削除 */
 
     #schedule input, #cost input {
@@ -222,8 +232,6 @@ th{
         </tr>
     </table>
 </div>
-
-<button class="add" onclick="addSchedule()">＋ 行程追加</button>
 
 <h2>🧳 持ち物チェック</h2>
 
@@ -309,6 +317,10 @@ function insertScheduleAfter(btn){
 }
 function deleteRow(btn){
     btn.parentElement.parentElement.remove();
+    if(schedule.rows.length === 1){
+        // 行が全部無くなると＋ボタンも消えて追加できなくなるため、空の行を1つ残す
+        addSchedule();
+    }
     saveDataSilent();
 }
 
