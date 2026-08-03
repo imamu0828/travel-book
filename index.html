@@ -269,7 +269,7 @@ th{
     <button class="export" onclick="exportJSON()">💾 JSON保存</button>
     <button class="import" onclick="document.getElementById('jsonFileInput').click()">📂 JSON読込</button>
     <input type="file" id="jsonFileInput" accept=".json,application/json" onchange="loadJSONFile(event)" style="display:none;">
-    <button class="clear" onclick="clearAll()">🗑 すべてクリア</button>
+    <button class="clear" onclick="clearAll()">🆕 新しいしおりを作る</button>
 </div>
 
 <p id="saveMessage" style="text-align: right; color: #666; font-size: 12px;">自動保存ON</p>
@@ -473,7 +473,14 @@ function exportJSON(e) {
     let data = getCurrentData();
     let jsonStr = JSON.stringify(data, null, 2);
 
-    let fileName = (data.title && data.title.trim() ? data.title.trim() : "旅のしおり") + "_旅のしおり.json";
+    // ファイル名の重複（上書き事故）を防ぐため、日時を付与する
+    let now = new Date();
+    let pad = n => String(n).padStart(2, "0");
+    let stamp = now.getFullYear() + pad(now.getMonth()+1) + pad(now.getDate())
+        + "_" + pad(now.getHours()) + pad(now.getMinutes());
+
+    let baseName = (data.title && data.title.trim()) ? data.title.trim() : "旅のしおり";
+    let fileName = baseName + "_旅のしおり_" + stamp + ".json";
 
     const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent);
 
@@ -487,10 +494,9 @@ function exportJSON(e) {
         let file = new File([jsonStr], fileName, { type: "application/json" });
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
             alert("共有シートが開いたら「ファイルに保存」を選んでください。\n(「メモ」や「メッセージ」を選ぶと正しく保存されません)");
-            navigator.share({ files: [file] }).catch(err => {
+            return navigator.share({ files: [file] }).catch(err => {
                 console.log("共有がキャンセルされました", err);
             });
-            return;
         }
     }
 
@@ -510,6 +516,8 @@ function exportJSON(e) {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     }, 10000);
+
+    return Promise.resolve();
 }
 
 function loadJSONFile(event) {
@@ -575,9 +583,16 @@ function applyData(data){
 // すべてクリア（新しいしおりを作る）
 // ===============================
 
-function clearAll(){
-    let ok = confirm("入力されているデータをすべて消して、新しいしおりを作りますか？\n(この操作は元に戻せません)");
+async function clearAll(){
+    let ok = confirm(
+        "新しい旅のしおりを作ります。\n" +
+        "今の内容は消えて元に戻せません。\n\n" +
+        "「OK」を押すと、念のため今の内容をJSONファイルとして保存してから、新しいしおりを作ります。\n" +
+        "(保存先を選ぶ画面が出たら、保存を確認してください)"
+    );
     if(!ok) return;
+
+    await exportJSON();
 
     localStorage.removeItem("travelBook");
     location.reload();
