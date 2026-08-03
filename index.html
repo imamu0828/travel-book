@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>旅のしおり Ver.2.1 (JSON同期対応・保存安定化)</title>
+
+<style>
+
+/* 基本スタイルの最適化 */
+body{
+    font-family: "Noto Sans JP", sans-serif;
+    background:#f5f7fa;
+    margin: 10px; /* スマホ向けに余白を少し縮小 */
+    padding: 0;
+    font-size: 14px; /* スマホで見やすいデフォルトサイズ */
+}
+
+.container{
+    max-width:950px;
+    margin:auto;
+    background:white;
+    padding: 15px; /* スマホ向けにパディングを調整 */
+    border-radius:12px;
+    box-sizing: border-box;
+}
+
+h1{
+    text-align:center;
+    font-size: 1.5rem;
+    margin-top: 10px;
+}
+
+h2{
+    background:#e8f1ff;
+    padding:8px 12px;
+    border-radius:8px;
+    font-size: 1.1rem;
+    margin-top: 25px;
+}
+
+input,
+textarea{
+    width:100%;
+    padding:8px;
+    box-sizing:border-box;
+    margin-bottom:8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px; /* iOSでの拡大防止用 */
+}
+
+textarea{
+    height:100px;
+}
+
+button{
+    padding:8px 12px;
+    border:none;
+    border-radius:6px;
+    cursor:pointer;
+    margin: 3px 2px;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+}
+
+.add{
+    background:#4caf50;
+    color:white;
+}
+
+.delete{
+    background:#e57373;
+    color:white;
+    padding: 4px 8px;
+}
+
+.save{
+    background:#2196f3;
+    color:white;
+}
+
+.export{
+    background:#ff9800;
+    color:white;
+}
+
+.import{
+    background:#9c27b0;
+    color:white;
+}
+
+/* テーブルを横スクロール可能にするコンテナ */
+.table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch; /* iOS用スムーズスクロール */
+    margin-bottom: 10px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    min-width: 500px; /* テーブルが縮みすぎるのを防止 */
+}
+
+th,
+td{
+    border:1px solid #ccc;
+    padding:6px;
+    text-align: left;
+}
+
+th{
+    background:#f0f0f0;
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.money{
+    text-align:right;
+}
+
+.total{
+    font-size:16px;
+    font-weight:bold;
+    text-align: right;
+}
+
+.check-item{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom: 8px;
+}
+
+.check-item input[type="checkbox"]{
+    width:auto;
+    margin-bottom:0;
+    transform: scale(1.2); /* チェックボックスを少し大きく */
+}
+
+.check-item span {
+    flex-grow: 1;
+}
+
+.action-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 20px;
+}
+
+.action-buttons button {
+   flex: 1; /* ボタンをすべて均等な大きさに揃える */
+    padding: 10px;
+}
+
+/* スマホ用メディアクエリ調整 */
+@media(max-width: 600px){
+    body {
+        margin: 5px;
+    }
+    
+    .container {
+        padding: 10px;
+    }
+
+    /* 行程表テーブルの各列最小幅確保 */
+    #schedule th:nth-child(1) { min-width: 65px; } /* 日付 */
+    #schedule th:nth-child(2) { min-width: 60px; } /* 時間 */
+    #schedule th:nth-child(3) { min-width: 100px; } /* 場所 */
+    #schedule th:nth-child(4) { min-width: 120px; } /* 内容 */
+    #schedule th:nth-child(5) { min-width: 100px; } /* メモ */
+    #schedule th:nth-child(6) { min-width: 50px; }  /* 削除 */
+
+    #schedule input, #cost input {
+        margin-bottom: 0;
+    }
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>🧳 旅のしおり</h1>
+
+<h2>📌 基本情報</h2>
+
+<label for="title">旅行名</label>
+<input id="title" placeholder="例: 沖縄2泊3日の旅">
+
+<label for="members">参加者</label>
+<input id="members" placeholder="例: たろう、はなこ">
+
+<h2>🗓 行程表</h2>
+
+<div class="table-wrapper">
+    <table id="schedule">
+        <tr>
+            <th>日付</th>
+            <th>時間</th>
+            <th>場所</th>
+            <th>内容</th>
+            <th>メモ</th>
+            <th></th>
+        </tr>
+    </table>
+</div>
+
+<button class="add" onclick="addSchedule()">＋ 行程追加</button>
+
+<h2>🧳 持ち物チェック</h2>
+
+<div id="items"></div>
+
+<div style="margin-top:10px; display:flex; gap:8px;">
+    <input id="newItem" placeholder="持ち物を追加" style="margin-bottom:0;">
+    <button class="add" onclick="addItem()" style="white-space:nowrap;">＋追加</button>
+</div>
+
+<h2>💰 費用メモ</h2>
+
+<div class="table-wrapper">
+    <table id="cost">
+        <tr>
+            <th>項目</th>
+            <th>金額 (円)</th>
+            <th></th>
+        </tr>
+    </table>
+</div>
+
+<button class="add" onclick="addCost()">＋ 費用追加</button>
+
+<p class="total">
+    合計：<span id="sum">0</span> 円
+</p>
+
+<h2>📝 旅行メモ</h2>
+
+<textarea id="memo" placeholder="旅の思い出、注意事項など"></textarea>
+
+<div class="action-buttons">
+    <button class="save" onclick="saveData()">💾 ブラウザ保存</button>
+    <button class="export" onclick="exportJSON()">💾 JSON保存</button>
+    <button class="import" onclick="document.getElementById('jsonFileInput').click()">📂 JSON読込</button>
+    <input type="file" id="jsonFileInput" accept=".json,application/json" onchange="loadJSONFile(event)" style="display:none;">
+</div>
+
+<p id="saveMessage" style="text-align: right; color: #666; font-size: 12px;">自動保存ON</p>
+
+</div>
+
+<script>
+
+// ===============================
+// 行程表
+// ===============================
+
+const schedule = document.getElementById("schedule");
+
+function addSchedule(data={}){
+    let row=schedule.insertRow();
+    row.innerHTML=`
+    <td>
+        <input type="text" inputmode="numeric" value="${data.date || ''}" placeholder="">
+    </td>
+    <td>
+        <input type="text" inputmode="numeric" value="${data.time || ''}" placeholder="">
+    </td>
+    <td>
+        <input value="${data.place || ''}" placeholder="">
+    </td>
+    <td>
+        <input value="${data.content || ''}" placeholder="">
+    </td>
+    <td>
+        <input value="${data.memo || ''}" placeholder="">
+    </td>
+    <td style="text-align: center;">
+        <button class="delete" onclick="deleteRow(this)">削除</button>
+    </td>
+    `;
+}
+function deleteRow(btn){
+    btn.parentElement.parentElement.remove();
+    saveDataSilent();
+}
+
+// ===============================
+// 持ち物
+// ===============================
+
+function addItem(){
+    let text=document.getElementById("newItem").value.trim();
+    if(text==="") return;
+    createItem({
+        text:text,
+        checked:false
+    });
+    saveDataSilent();
+}
+
+function createItem(data){
+    if(typeof data==="string"){
+        data={ text:data, checked:false };
+    }
+    let text=data.text.trim();
+    if(text==="") return;
+
+    let div=document.createElement("div");
+    div.className="check-item";
+
+    div.innerHTML=`
+        <input type="checkbox" ${data.checked ? "checked" : ""} onchange="saveDataSilent()">
+        <span>${text}</span>
+        <button class="delete" onclick="this.parentElement.remove(); saveDataSilent();">削除</button>
+    `;
+
+    document.getElementById("items").appendChild(div);
+    document.getElementById("newItem").value="";
+}
+
+// ===============================
+// 費用
+// ===============================
+
+const cost = document.getElementById("cost");
+
+function addCost(data={}){
+    let row=cost.insertRow();
+    row.innerHTML=`
+    <td>
+        <input value="${data.name || ''}" placeholder="宿泊">
+    </td>
+    <td>
+        <input class="money" type="text" inputmode="numeric" value="${data.price || ''}" placeholder="0" oninput="calcTotal(); saveDataSilent();">
+    </td>
+    <td style="text-align: center;">
+        <button class="delete" onclick="deleteCost(this)">削除</button>
+    </td>
+    `;
+    calcTotal();
+}
+
+function deleteCost(btn){
+    btn.parentElement.parentElement.remove();
+    calcTotal();
+    saveDataSilent();
+}
+
+function calcTotal(){
+    let total=0;
+    for(let i=1;i<cost.rows.length;i++){
+        let price=Number(cost.rows[i].cells[1].querySelector("input").value);
+        total += price || 0;
+    }
+    document.getElementById("sum").innerText=total.toLocaleString();
+}
+
+// ===============================
+// データ取得ヘルパー
+// ===============================
+
+function getCurrentData(){
+    let schedules=[];
+    for(let i=1;i<schedule.rows.length;i++){
+        let c=schedule.rows[i].cells;
+        schedules.push({
+            date:c[0].children[0].value,
+            time:c[1].children[0].value,
+            place:c[2].children[0].value,
+            content:c[3].children[0].value,
+            memo:c[4].children[0].value
+        });
+    }
+
+    let items=[];
+    document.querySelectorAll("#items div").forEach(div=>{
+        items.push({
+            text:div.querySelector("span").innerText,
+            checked:div.querySelector("input").checked
+        });
+    });
+
+    let costs=[];
+    for(let i=1;i<cost.rows.length;i++){
+        let c=cost.rows[i].cells;
+        costs.push({
+            name:c[0].children[0].value,
+            price:c[1].querySelector("input").value
+        });
+    }
+
+    return {
+        title: document.getElementById("title").value,
+        members: document.getElementById("members").value,
+        schedule: schedules,
+        items: items,
+        cost: costs,
+        memo: document.getElementById("memo").value
+    };
+}
+
+// ===============================
+// 保存(ブラウザ内)
+// ===============================
+
+function saveData(){
+    let data = getCurrentData();
+    localStorage.setItem("travelBook", JSON.stringify(data));
+    alert("保存しました😊");
+}
+
+function saveDataSilent(){
+    let data = getCurrentData();
+    localStorage.setItem("travelBook", JSON.stringify(data));
+    document.getElementById("saveMessage").innerText = "✓ 自動保存済み";
+}
+
+// ===============================
+// JSONファイル保存・読込
+// ★修正ポイント
+//  1. BOM(\uFEFF)を削除 → JSON仕様上不要で、共有先アプリの文字コード誤判定(文字化け)の原因になっていた
+//  2. MIMEタイプに charset=utf-8 を明示
+//  3. navigator.share (OSの共有シート) に頼るのをやめ、常にブラウザの
+//     直接ダウンロード機能を使うように統一
+//     → 共有シートの場合、ユーザーが選ぶ相手アプリ(メモ/LINE/メールなど)
+//       次第で .txt にリネームされたり中身が変換されたりする問題があり、
+//       これはWeb側では制御できないため
+// ===============================
+
+function exportJSON(e) {
+    if (e) e.preventDefault();
+
+    let data = getCurrentData();
+    let jsonStr = JSON.stringify(data, null, 2);
+
+    let fileName = (data.title && data.title.trim() ? data.title.trim() : "旅のしおり") + "_旅のしおり.json";
+
+    const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent);
+
+    // ★iPhone(iOS Safari)向け: 共有シート経由で保存
+    // iOS Safariは blob: URL + download属性の組み合わせが不安定で、
+    // ダウンロードの代わりに現在のページがJSONの中身に置き換わってしまい、
+    // 結果として入力途中のデータが消えたように見える現象が起きる。
+    // これを避けるため、ページ遷移を伴わない navigator.share (共有シート) を使う。
+    // BOMは既に外しているので文字化けは起きないはず。
+    if (isIOS && navigator.share) {
+        let file = new File([jsonStr], fileName, { type: "application/json" });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            alert("共有シートが開いたら「ファイルに保存」を選んでください。\n(「メモ」や「メッセージ」を選ぶと正しく保存されません)");
+            navigator.share({ files: [file] }).catch(err => {
+                console.log("共有がキャンセルされました", err);
+            });
+            return;
+        }
+    }
+
+    // PC/Androidなど: 直接ダウンロード
+    // type を application/octet-stream にして、ブラウザがその場で
+    // プレビュー表示せず確実にダウンロードするようにする
+    let blob = new Blob([jsonStr], { type: "application/octet-stream" });
+    let url = URL.createObjectURL(blob);
+
+    let a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+
+    setTimeout(function(){
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }, 10000);
+}
+
+function loadJSONFile(event) {
+    let file = event.target.files[0];
+    if (!file) return;
+
+    let reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            // 万が一BOM付きファイル(他アプリ由来など)を読み込んでも
+            // 先頭のBOMを取り除いてからパースする安全策
+            let text = e.target.result.replace(/^\uFEFF/, "");
+            let data = JSON.parse(text);
+            applyData(data);
+            saveDataSilent();
+            alert("JSONデータを読み込みました！");
+        } catch (err) {
+            alert("JSONファイルの読み込みに失敗しました。正しい形式のファイルを選択してください。");
+        }
+    };
+    reader.readAsText(file, "UTF-8");
+    event.target.value = "";
+}
+
+function applyData(data){
+    if(!data) return;
+
+    while(schedule.rows.length > 1){
+        schedule.deleteRow(1);
+    }
+
+    document.getElementById("items").innerHTML = "";
+
+    while(cost.rows.length > 1){
+        cost.deleteRow(1);
+    }
+
+    document.getElementById("title").value = data.title || "";
+    document.getElementById("members").value = data.members || "";
+
+    if(data.schedule && data.schedule.length > 0){
+        data.schedule.forEach(x => addSchedule(x));
+    } else {
+        addSchedule();
+    }
+
+    if(data.items && data.items.length > 0){
+        data.items.forEach(x => createItem(x));
+    }
+
+    if(data.cost && data.cost.length > 0){
+        data.cost.forEach(x => addCost(x));
+    } else {
+        addCost();
+    }
+
+    document.getElementById("memo").value = data.memo || "";
+
+    calcTotal();
+}
+
+// ===============================
+// 読み込み（初回起動時）
+// ===============================
+
+function loadData(){
+    let data = JSON.parse(localStorage.getItem("travelBook"));
+
+    if(!data){
+        addSchedule();
+        createItem("財布");
+        createItem("スマホ");
+        createItem("充電器");
+        addCost();
+    } else {
+        applyData(data);
+    }
+}
+
+loadData();
+
+// ===============================
+// 自動保存イベント
+// ===============================
+
+document.addEventListener("input", function(){
+    saveDataSilent();
+});
+
+</script>
+
+</body>
+</html>
