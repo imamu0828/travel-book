@@ -270,16 +270,14 @@ th{
 <textarea id="memo" placeholder="旅の思い出、注意事項など"></textarea>
 
 <div class="action-buttons">
-    <button class="save" onclick="saveData()">💾 ブラウザ保存</button>
     <button class="export" onclick="exportJSONFinal()">📌 JSON最終版として保存</button>
     <button class="export" onclick="exportJSONOverwrite()">💾 JSON上書き保存</button>
     <button class="import" onclick="document.getElementById('jsonFileInput').click()">📂 JSON読込</button>
     <input type="file" id="jsonFileInput" accept=".json,application/json" onchange="loadJSONFile(event)" style="display:none;">
-    <button class="folder" onclick="chooseSaveFolder()">📁 保存先フォルダを設定</button>
     <button class="clear" onclick="clearAll()">🆕 新しいしおりを作る</button>
 </div>
-<p style="text-align:right; color:#999; font-size:11px; margin-top:-8px;">
-    ※「保存先フォルダを設定」はChrome/Edge限定です。一度設定すると、次回からJSON保存時にそのフォルダへ自動保存されます(初回のみ)。
+<p style="text-align:right; margin-top:10px;">
+    <a href="#" onclick="chooseSaveFolder(); return false;" style="font-size:12px; color:#00838f; text-decoration:underline;">📁 保存先フォルダを設定する(初回のみ・Chrome/Edge限定)</a>
 </p>
 
 <p id="saveMessage" style="text-align: right; color: #666; font-size: 12px;">自動保存ON</p>
@@ -450,14 +448,8 @@ function getCurrentData(){
 }
 
 // ===============================
-// 保存(ブラウザ内)
+// 保存(ブラウザ内・自動保存)
 // ===============================
-
-function saveData(){
-    let data = getCurrentData();
-    localStorage.setItem("travelBook", JSON.stringify(data));
-    alert("保存しました😊");
-}
 
 function saveDataSilent(){
     let data = getCurrentData();
