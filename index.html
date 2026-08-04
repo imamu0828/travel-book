@@ -96,6 +96,11 @@ button{
     color:white;
 }
 
+.folder{
+    background:#00838f;
+    color:white;
+}
+
 .clear{
     background:#757575;
     color:white;
@@ -266,11 +271,16 @@ th{
 
 <div class="action-buttons">
     <button class="save" onclick="saveData()">💾 ブラウザ保存</button>
-    <button class="export" onclick="exportJSON()">💾 JSON保存</button>
+    <button class="export" onclick="exportJSONFinal()">📌 JSON最終版として保存</button>
+    <button class="export" onclick="exportJSONOverwrite()">💾 JSON上書き保存</button>
     <button class="import" onclick="document.getElementById('jsonFileInput').click()">📂 JSON読込</button>
     <input type="file" id="jsonFileInput" accept=".json,application/json" onchange="loadJSONFile(event)" style="display:none;">
+    <button class="folder" onclick="chooseSaveFolder()">📁 保存先フォルダを設定</button>
     <button class="clear" onclick="clearAll()">🆕 新しいしおりを作る</button>
 </div>
+<p style="text-align:right; color:#999; font-size:11px; margin-top:-8px;">
+    ※「保存先フォルダを設定」はChrome/Edge限定です。一度設定すると、次回からJSON保存時にそのフォルダへ自動保存されます(初回のみ)。
+</p>
 
 <p id="saveMessage" style="text-align: right; color: #666; font-size: 12px;">自動保存ON</p>
 
@@ -467,21 +477,85 @@ function saveDataSilent(){
 //       これはWeb側では制御できないため
 // ===============================
 
-function exportJSON(e) {
-    if (e) e.preventDefault();
+// ===============================
+// 保存先フォルダを記憶する仕組み (Chrome/Edge限定)
+// IndexedDBにフォルダのハンドルを保存しておき、次回以降は
+// ダイアログなしでそのフォルダに自動保存できるようにする
+// ===============================
 
-    let data = getCurrentData();
-    let jsonStr = JSON.stringify(data, null, 2);
+const FOLDER_DB_NAME = "travelBookDB";
+const FOLDER_STORE_NAME = "handles";
+const FOLDER_HANDLE_KEY = "saveDir";
 
-    // ファイル名の重複（上書き事故）を防ぐため、日時を付与する
-    let now = new Date();
-    let pad = n => String(n).padStart(2, "0");
-    let stamp = now.getFullYear() + pad(now.getMonth()+1) + pad(now.getDate())
-        + "_" + pad(now.getHours()) + pad(now.getMinutes());
+function folderDBOpen(){
+    return new Promise((resolve, reject) => {
+        let req = indexedDB.open(FOLDER_DB_NAME, 1);
+        req.onupgradeneeded = () => {
+            req.result.createObjectStore(FOLDER_STORE_NAME);
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
 
-    let baseName = (data.title && data.title.trim()) ? data.title.trim() : "旅のしおり";
-    let fileName = baseName + "_旅のしおり_" + stamp + ".json";
+async function folderDBGet(key){
+    const db = await folderDBOpen();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(FOLDER_STORE_NAME, "readonly");
+        const req = tx.objectStore(FOLDER_STORE_NAME).get(key);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
 
+async function folderDBSet(key, value){
+    const db = await folderDBOpen();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(FOLDER_STORE_NAME, "readwrite");
+        const req = tx.objectStore(FOLDER_STORE_NAME).put(value, key);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+    });
+}
+
+// 「📁 保存先フォルダを設定」ボタン: 最初に1回だけ、iCloud Driveなどのフォルダを選んで記憶する
+async function chooseSaveFolder(){
+    if (!window.showDirectoryPicker) {
+        alert("この機能はChromeまたはEdge(PC版)でのみ使えます。");
+        return;
+    }
+    try {
+        const handle = await window.showDirectoryPicker();
+        await folderDBSet(FOLDER_HANDLE_KEY, handle);
+        alert("保存先フォルダを設定しました😊\n次回からJSON保存時に、自動でこのフォルダに保存されます。");
+    } catch (err) {
+        console.log("フォルダ選択がキャンセルされました", err);
+    }
+}
+
+// 記憶しているフォルダのハンドルを取得(権限もあわせて確認・再取得)
+async function getSavedFolderHandle(){
+    if (!window.indexedDB) return null;
+    try {
+        const handle = await folderDBGet(FOLDER_HANDLE_KEY);
+        if (!handle) return null;
+
+        const opts = { mode: "readwrite" };
+        let perm = await handle.queryPermission(opts);
+        if (perm !== "granted") {
+            perm = await handle.requestPermission(opts);
+        }
+        if (perm !== "granted") return null;
+
+        return handle;
+    } catch (err) {
+        console.log("保存先フォルダの取得に失敗しました", err);
+        return null;
+    }
+}
+
+
+async function saveJSONFile(fileName, jsonStr){
     const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent);
 
     // ★iPhone(iOS Safari)向け: 共有シート経由で保存
@@ -500,7 +574,41 @@ function exportJSON(e) {
         }
     }
 
-    // PC/Androidなど: 直接ダウンロード
+    // ★記憶済みの保存先フォルダ(iCloud Driveなど)があれば、
+    // ダイアログを出さずそこに直接自動保存する
+    const savedFolder = await getSavedFolderHandle();
+    if (savedFolder) {
+        try {
+            const fileHandle = await savedFolder.getFileHandle(fileName, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(jsonStr);
+            await writable.close();
+            return;
+        } catch (err) {
+            console.log("記憶済みフォルダへの保存に失敗、通常の保存方法に切り替えます", err);
+        }
+    }
+
+    // ★PC(Chrome/Edgeなど)向け: 「名前を付けて保存」ダイアログを開き、
+    // iCloud DriveやOneDriveなど好きな保存先を毎回選べるようにする
+    if (window.showSaveFilePicker) {
+        try {
+            const handle = await window.showSaveFilePicker({
+                suggestedName: fileName,
+                types: [{ description: "JSON", accept: { "application/json": [".json"] } }]
+            });
+            const writable = await handle.createWritable();
+            await writable.write(jsonStr);
+            await writable.close();
+            return;
+        } catch (err) {
+            // ユーザーがキャンセルした場合は何もしない
+            if (err && err.name === "AbortError") return;
+            console.log("名前を付けて保存に失敗、通常のダウンロードに切り替えます", err);
+        }
+    }
+
+    // それ以外(Safari on Mac/Firefoxなど): ダウンロードフォルダへ直接ダウンロード
     // type を application/octet-stream にして、ブラウザがその場で
     // プレビュー表示せず確実にダウンロードするようにする
     let blob = new Blob([jsonStr], { type: "application/octet-stream" });
@@ -516,8 +624,37 @@ function exportJSON(e) {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     }, 10000);
+}
 
-    return Promise.resolve();
+// 「JSON最終版として保存」: ファイル名に日時を付ける（保存するたびに増える）
+function exportJSONFinal(e) {
+    if (e) e.preventDefault();
+
+    let data = getCurrentData();
+    let jsonStr = JSON.stringify(data, null, 2);
+
+    let now = new Date();
+    let pad = n => String(n).padStart(2, "0");
+    let stamp = now.getFullYear() + pad(now.getMonth()+1) + pad(now.getDate())
+        + "_" + pad(now.getHours()) + pad(now.getMinutes());
+
+    let baseName = (data.title && data.title.trim()) ? data.title.trim() : "旅のしおり";
+    let fileName = baseName + "_旅のしおり_確定版_" + stamp + ".json";
+
+    return saveJSONFile(fileName, jsonStr);
+}
+
+// 「JSON上書き保存」: ファイル名は毎回同じ（旅行名のみ）。作業中のこまめな保存用。
+function exportJSONOverwrite(e) {
+    if (e) e.preventDefault();
+
+    let data = getCurrentData();
+    let jsonStr = JSON.stringify(data, null, 2);
+
+    let baseName = (data.title && data.title.trim()) ? data.title.trim() : "旅のしおり";
+    let fileName = baseName + "_旅のしおり.json";
+
+    return saveJSONFile(fileName, jsonStr);
 }
 
 function loadJSONFile(event) {
@@ -587,12 +724,12 @@ async function clearAll(){
     let ok = confirm(
         "新しい旅のしおりを作ります。\n" +
         "今の内容は消えて元に戻せません。\n\n" +
-        "「OK」を押すと、念のため今の内容をJSONファイルとして保存してから、新しいしおりを作ります。\n" +
+        "「OK」を押すと、念のため今の内容を「JSON最終版」として保存してから、新しいしおりを作ります。\n" +
         "(保存先を選ぶ画面が出たら、保存を確認してください)"
     );
     if(!ok) return;
 
-    await exportJSON();
+    await exportJSONFinal();
 
     localStorage.removeItem("travelBook");
     location.reload();
